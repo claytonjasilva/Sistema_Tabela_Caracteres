@@ -9,6 +9,8 @@
 ;          João Victor Bathomarco - 202302902448 - TA
 
 
+; PARA ENTRAR NAS FUNCOES DEVE-SE LIGAR O PROGRAMA, INSERINDO NOVAMENTE O 0x1C
+
 ; Define os endereços na memória
 .equ BASE_ADDR = 0x200    ; Base da tabela de caracteres ASCII
 .equ SEQ_ADDR = 0x300     ; Início do espaço para sequências
@@ -247,6 +249,9 @@ NEXT_ENTRY:
     ldi r16, 1              ; Inicializa a frequência como 1
     st Y, r16               ; Atualiza a frequência
     ret
+
+; Para a 5 não conseguimos correlacionar os caracteres inseridos com uma database dos que já foram lidos, 
+utilizando apenas a lógica simples do assembly.
 
 
 
