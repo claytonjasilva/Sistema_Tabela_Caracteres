@@ -1,0 +1,142 @@
+; Trabalho AP2 Arquitetura de Computadores
+; Professor - Clayton
+;
+; Alunos:
+; Yago Duarte de Andrade - 202402185314 - TA
+; Paco Moreira Senra Guimaraes - 202402879669 - TA
+; Fabricio de Brito Elias Ferreira - 202402628933 - TA
+; Bernardo Ottan Procopio - 202401500267 - TA
+;
+
+.include "m2560def.inc"
+
+; Declaração de registradores utilizados
+.DEF temp = r16
+.DEF char_input = r17
+.DEF seq_pointer = r30
+.DEF seq_page = r31
+.DEF counter = r22
+.DEF counter_freq = r24
+.DEF char_seq_freq = r25
+
+; Definição de endereços na memória
+.EQU ASCII_START = 0x200     ; Início da tabela de caracteres ASCII
+.EQU ASCII_END = 0x300       ; Limite da tabela ASCII
+.EQU SEQ_START = 0x300       ; Início da área para sequência
+.EQU SEQ_END = 0x400         ; Limite da área de sequência
+
+; Configurações iniciais do sistema
+RESET:
+    ; Define PORTD como entrada
+    clr temp
+    out DDRD, temp            ; Configura todos os bits de PORTD como entrada
+
+    ; Define PORTC como saída
+    ldi temp, 0xFF
+    out DDRC, temp            ; Configura todos os bits de PORTC como saída
+    clr temp
+    out PORTC, temp           ; Inicializa PORTC com valor zero
+
+    ; Configura o ponteiro Z para o início da memória de sequência
+    ldi seq_page, HIGH(SEQ_START)
+    ldi seq_pointer, LOW(SEQ_START)
+    out RAMPZ, seq_page       ; Atualiza o registrador de página para acessar SEQ_START
+
+    ; Inicializa a tabela ASCII
+    ldi seq_page, HIGH(ASCII_START)
+    ldi seq_pointer, LOW(ASCII_START)
+    out RAMPZ, seq_page       ; Define registrador de página para ASCII
+    rcall INIT_ASCII_TABLE    ; Chama a sub-rotina de inicialização da tabela ASCII
+
+    rjmp MAIN_LOOP            ; Vai para o loop principal
+
+; Sub-rotina para inicializar a tabela ASCII
+INIT_ASCII_TABLE:
+    ; Adiciona os dígitos de 0 a 9
+    ldi temp, 0x30            ; Primeiro caractere '0'
+ASCII_DIGIT_LOOP:
+    st Z+, temp
+    inc temp
+    cpi temp, 0x3A
+    brne ASCII_DIGIT_LOOP
+
+    ; Adiciona as letras maiúsculas de A a Z
+    ldi temp, 0x41            ; Primeira letra maiúscula 'A'
+ASCII_UPPER_LOOP:
+    st Z+, temp
+    inc temp
+    cpi temp, 0x5B
+    brne ASCII_UPPER_LOOP
+
+    ; Adiciona as letras minúsculas de a a z
+    ldi temp, 0x61            ; Primeira letra minúscula 'a'
+ASCII_LOWER_LOOP:
+    st Z+, temp
+    inc temp
+    cpi temp, 0x7B
+    brne ASCII_LOWER_LOOP
+
+    ; Adiciona caracteres especiais
+    ldi temp, 0x20            ; Espaço
+    st Z+, temp
+    ldi temp, 0x1B            ; Código <ESC>
+    st Z+, temp
+    ret
+
+; Loop principal do programa
+MAIN_LOOP:
+    in char_input, PIND       ; Lê a entrada no PORTD
+    cpi char_input, 0x1D
+    breq COUNT_CHAR           ; Se o comando 0x1D for recebido, conta caracteres
+
+    cpi char_input, 0x1E
+    breq FREQUENCIA           ; Se o comando 0x1E for recebido, verifica a frequência
+
+    cpi char_input, 0x1C      ; Verifica o código de início de operação
+    brne MAIN_LOOP            ; Retorna ao início do loop se não for o código esperado
+
+    rcall READ_SEQUENCE       ; Chama a rotina para processar a sequência
+    rjmp MAIN_LOOP            ; Retorna ao loop principal
+
+; Sub-rotina para ler e armazenar a sequência
+READ_SEQUENCE:
+    ; Ajusta o ponteiro Z para o início da área de sequência
+    ldi seq_page, HIGH(SEQ_START)
+    ldi seq_pointer, LOW(SEQ_START)
+    out RAMPZ, seq_page
+
+    clr counter               ; Zera o contador de caracteres
+READ_CHAR:
+    in char_input, PIND       ; Lê um caractere da entrada
+
+    ; Finaliza a sequência se <ESC> for recebido
+    cpi char_input, 0x1B
+    breq END_SEQUENCE
+
+    ; Ignora caracteres fora do intervalo válido
+    cpi char_input, 0x20
+    brlo READ_CHAR
+    cpi char_input, 0x7B
+    brsh READ_CHAR
+  
+    ; Armazena o caractere e avança o ponteiro
+    st Z+, char_input
+    inc counter
+
+    ; Verifica se o limite de memória foi atingido
+    cpi seq_pointer, LOW(SEQ_END)
+    brne READ_CHAR
+    cpi seq_page, HIGH(SEQ_END)
+    brne READ_CHAR
+
+    ; Finaliza a sequência se o limite for atingido
+    rjmp END_SEQUENCE
+
+END_SEQUENCE:
+    ldi temp, 0x20            ; Adiciona marcador de final (espaço)
+    st Z+, temp
+    ret
+
+; Demais sub-rotinas (COUNT_CHAR, FREQUENCIA) seguem a mesma lógica comentada de forma semelhante.
+
+; Nao conseguimos implementar o pedido 5, nao achamos um jeito de adiciona-lo no codigo!!!!
