@@ -4,47 +4,162 @@
 // Felipe Dutrain de Sales -202402011359 - TA
 // Leonardo Almeida Vaz - 202402626604 - TA
 
-
-; ---------------------------------------------------------------------
-; Validação de Caracteres Simples
-; ---------------------------------------------------------------------
-
 ; Definições de Constantes
 .equ SPACE_CODE = 0x20     ; Código ASCII do espaço
+.equ ESC_CODE = 0x1B       ; Código ASCII do ESC
 .equ MAX_ADDR = 0x7F       ; Maior código ASCII válido
+.equ MAX_FREQUENT = 10     ; Número máximo de caracteres frequentes
 
-; Definições de Registros
+; Definições de Registradores
 .def TEMP = r16            ; Registro temporário
-.def VALID_FLAG = r17      ; Registro para sinalizar validade (0 = válido, 1 = inválido)
+.def VALID_FLAG = r17      ; Registro para sinalizar validade
+.def INPUT = r18           ; Entrada do PORTD
+.def COUNT = r19           ; Contador genérico
+.def AUX = r20             ; Registro auxiliar
+.def FREQ_COUNT = r21      ; Contador para frequência
 
-; Inicialização
-.org 0x0000                ; Início do programa
+; Ponteiros e Memória
+.def XH = r27              ; Ponteiro X (memória de trabalho)
+.def XL = r26              
+.def YH = r29              ; Ponteiro Y (frequência)
+.def YL = r28              
+
+.org 0x0000
 
 start:
     ; Configurar PORTD como entrada e PORTC como saída
-    clr r16                ; Limpa r16 para configurar como entrada
-    out DDRD, r16          ; Configura todos os pinos de PORTD como entrada
-    ldi r16, 0xFF          ; Configura r16 para saída
-    out DDRC, r16          ; Configura todos os pinos de PORTC como saída
+    clr TEMP
+    out DDRD, TEMP          ; PORTD como entrada
+    ldi TEMP, 0xFF
+    out DDRC, TEMP          ; PORTC como saída
 
-main:
-    ; Ler caractere da entrada (PORTD)
-    in TEMP, PIND          ; Lê o valor de PORTD e armazena em TEMP
-    
-    ; Validar o caractere
-    cpi TEMP, SPACE_CODE   ; Compara TEMP com o menor código válido (espaço)
-    brlo invalid           ; Salta para "invalid" se for menor que SPACE_CODE
-    cpi TEMP, MAX_ADDR     ; Compara TEMP com o maior código válido
-    brge invalid           ; Salta para "invalid" se for maior ou igual a MAX_ADDR
+    ; Inicializar Ponteiros
+    ldi XH, 0x02            ; Memória de trabalho em 0x200
+    clr XL
+    ldi YH, 0x04            ; Tabela de frequência em 0x400
+    clr YL
 
-    ; Se for válido
-    clr VALID_FLAG         ; Define VALID_FLAG como 0 (válido)
-    rjmp output            ; Salta para exibir o resultado
+    ; Preencher a tabela inicial
+    rjmp InitTable
 
-invalid:
-    ldi VALID_FLAG, 0x01   ; Define VALID_FLAG como 1 (inválido)
+; ---------------------------------------------------------------------
+; Preenchimento da Tabela Inicial
+; ---------------------------------------------------------------------
+InitTable:
+    ; Espaço
+    ldi AUX, SPACE_CODE
+    st X+, AUX
+    ; ESC
+    ldi AUX, ESC_CODE
+    st X+, AUX
+    ; Letras maiúsculas
+    ldi AUX, 0x41            ; 'A'
+    ldi COUNT, 26            ; Total de letras maiúsculas
+AddUppercase:
+    st X+, AUX
+    inc AUX
+    dec COUNT
+    brne AddUppercase
+    ; Letras minúsculas
+    ldi AUX, 0x61            ; 'a'
+    ldi COUNT, 26            ; Total de letras minúsculas
+AddLowercase:
+    st X+, AUX
+    inc AUX
+    dec COUNT
+    brne AddLowercase
+    ; Dígitos
+    ldi AUX, 0x30            ; '0'
+    ldi COUNT, 10            ; Total de dígitos
+AddDigits:
+    st X+, AUX
+    inc AUX
+    dec COUNT
+    brne AddDigits
+    ; Fim do preenchimento
+    rjmp CommandHandler
 
-output:
-    ; Apresentar o resultado na saída (PORTC)
-    out PORTC, VALID_FLAG  ; Envia o valor de VALID_FLAG para PORTC
-    rjmp main              ; Retorna ao início para nova leitura
+; ---------------------------------------------------------------------
+; Manipulação de Comandos
+; ---------------------------------------------------------------------
+CommandHandler:
+    in INPUT, PIND           ; Ler entrada do PORTD
+    cpi INPUT, 0x1C          ; Comando para tabela de caracteres
+    breq HandleTable
+    cpi INPUT, 0x1D          ; Comando para contar caracteres
+    breq HandleCount
+    cpi INPUT, 0x1E          ; Comando para frequência específica
+    breq HandleFrequency
+    rjmp CommandHandler      ; Loop de espera
+
+; ---------------------------------------------------------------------
+; Exibição da Tabela de Caracteres
+; ---------------------------------------------------------------------
+HandleTable:
+    ldi XH, 0x03             ; Ponteiro para tabela inicial (0x300)
+    clr XL
+TableLoop:
+    ld AUX, X+               ; Carregar caractere da tabela
+    out PORTC, AUX           ; Mostrar no PORTC
+    cpi AUX, 0x00            ; Verificar fim da tabela
+    breq CommandHandler
+    rjmp TableLoop
+
+; ---------------------------------------------------------------------
+; Contagem de Caracteres na Tabela
+; ---------------------------------------------------------------------
+HandleCount:
+    ldi XH, 0x03             ; Ponteiro para tabela inicial (0x300)
+    clr XL
+    clr COUNT                ; Zerar contador
+CountLoop:
+    ld AUX, X+               ; Ler caractere da tabela
+    cpi AUX, 0x00            ; Verificar fim
+    breq ShowCount
+    inc COUNT                ; Incrementar contador
+    rjmp CountLoop
+ShowCount:
+    out PORTC, COUNT         ; Mostrar contador no PORTC
+    rjmp CommandHandler
+
+; ---------------------------------------------------------------------
+; Frequência de Caracteres
+; ---------------------------------------------------------------------
+HandleFrequency:
+    in INPUT, PIND           ; Ler caractere para frequência
+    clr FREQ_COUNT           ; Zerar contador de frequência
+    ldi XH, 0x03             ; Ponteiro para tabela inicial (0x300)
+    clr XL
+FrequencyLoop:
+    ld AUX, X+               ; Ler caractere da tabela
+    cpi AUX, 0x00            ; Verificar fim
+    breq ShowFrequency
+    cp AUX, INPUT            ; Comparar caractere
+    brne FrequencyLoop
+    inc FREQ_COUNT           ; Incrementar frequência
+    rjmp FrequencyLoop
+ShowFrequency:
+    out PORTC, FREQ_COUNT    ; Mostrar frequência no PORTC
+    rjmp CommandHandler
+
+; ---------------------------------------------------------------------
+; Ordenação de Frequência
+; ---------------------------------------------------------------------
+HandleSorting:
+    ldi YH, 0x04             ; Ponteiro para tabela de frequência
+    clr YL
+    ldi COUNT, MAX_FREQUENT  ; Número máximo de entradas
+SortLoop:
+    ldi XH, 0x04             ; Ponteiro para tabela de frequência
+    clr XL
+    ld AUX, X+               ; Ler primeira frequência
+    ld TEMP, X+              ; Ler segunda frequência
+    cp AUX, TEMP             ; Comparar
+    brlo NoSwap
+    ; Swap Frequências
+    st -X, TEMP
+    st X, AUX
+NoSwap:
+    dec COUNT
+    brne SortLoop
+    rjmp CommandHandler
