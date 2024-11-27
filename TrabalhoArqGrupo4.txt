@@ -1,0 +1,87 @@
+; Projeto: Prática com Tabelas de Caracteres - ATmega2560
+; Disciplina: Arquitetura de Computadores
+; Professor: Clayton J A Silva
+; Desenvolvido para ser testado no MicroChip Studio
+;
+; Integrantes:
+; - Thales Vieira Pereira - Matrícula: 202303458606 - Contribuições: NT=10, TP=8, TA=9
+; - Rodrigo Souza - Matrícula: 202202064831 - Contribuições: NT=7, TP=9, TA=8
+; - Vitor Oliveira - Matrícula: 202402818406 - Contribuições: NT=9, TP=7, TA=10
+;
+; Autoavaliação: 
+; NT (Nível técnico): Avaliação da qualidade técnica do trabalho desenvolvido.
+; TP (Trabalho em equipe): Avaliação da capacidade de colaboração e comunicação com o grupo.
+; TA (Tempo aplicado): Avaliação do tempo dedicado ao projeto.
+; Configurações iniciais
+LDI R16, 0x20           ; Código do espaço em branco
+STS 0x200, R16          ; Armazena o espaço em branco no endereço 0x200
+LDI R16, 0x1B           ; Código ASCII do caractere <ESC>
+STS 0x201, R16          ; Armazena o <ESC> no endereço 0x201
+
+; Loop principal
+MAIN_LOOP:
+    IN R16, PINB          ; Ler o valor da porta de entrada
+    CPI R16, 0x1C         ; Verifica comando de leitura de sequência
+    BREQ READ_SEQUENCE
+    CPI R16, 0x1D         ; Verifica comando de contagem de caracteres
+    BREQ COUNT_CHARACTERS
+    CPI R16, 0x1E         ; Verifica comando de frequência de caracteres
+    BREQ CHAR_FREQUENCY
+    RJMP MAIN_LOOP        ; Retorna ao início
+
+; Leitura de sequência
+READ_SEQUENCE:
+    LDI R26, 0x00         ; Parte baixa do endereço base (0x300)
+    LDI R27, 0x03         ; Parte alta do endereço base (0x300)
+READ_LOOP:
+    IN R18, PINB          ; Lê caractere da porta de entrada
+    CPI R18, 0x1B         ; Verifica se é o caractere <ESC>
+    BREQ END_SEQUENCE
+    CPI R18, 0x20         ; Verifica se o caractere é válido
+    BRLO READ_LOOP        ; Loop até caractere válido
+    BRMI READ_LOOP        ; Loop até caractere válido
+    ST X+, R18            ; Armazena caractere na memória e incrementa endereço
+    CPI R27, 0x04         ; Verifica limite alto (0x400)
+    BRGE END_SEQUENCE     ; Interrompe se ultrapassou limite
+    RJMP READ_LOOP        ; Continua leitura
+END_SEQUENCE:
+    LDI R19, 0x20         ; Espaço em branco como marcador
+    ST X+, R19            ; Armazena o marcador
+    RJMP MAIN_LOOP        ; Retorna ao loop principal
+
+; Contagem de caracteres
+COUNT_CHARACTERS:
+    LDI R26, 0x00         ; Parte baixa do endereço (0x300)
+    LDI R27, 0x03         ; Parte alta do endereço (0x300)
+    LDI R20, 0            ; Inicializa o contador
+COUNT_LOOP:
+    LD R18, X+            ; Lê caractere da tabela
+    CPI R18, 0x20         ; Verifica marcador de espaço em branco
+    BREQ END_COUNT        ; Finaliza a contagem
+    INC R20               ; Incrementa o contador
+    CPI R27, 0x04         ; Verifica limite alto (0x400)
+    BRGE END_COUNT        ; Sai se ultrapassou limite
+    RJMP COUNT_LOOP       ; Continua a contagem
+END_COUNT:
+    STS 0x401, R20        ; Armazena o resultado no endereço 0x401
+    OUT PORTC, R20        ; Envia o resultado para a saída
+    RJMP MAIN_LOOP        ; Retorna ao loop principal
+
+; Frequência de caracteres
+CHAR_FREQUENCY:
+    LDI R26, 0x00         ; Parte baixa do endereço (0x300)
+    LDI R27, 0x03         ; Parte alta do endereço (0x300)
+    IN R21, PINB          ; Lê o caractere de entrada
+    LDI R20, 0            ; Inicializa contador de frequência
+FREQ_LOOP:
+    LD R18, X+            ; Lê caractere da tabela
+    CPI R18, R21          ; Compara com o caractere de entrada
+    BRNE FREQ_NEXT        ; Pula se não for igual
+    INC R20               ; Incrementa a frequência
+FREQ_NEXT:
+    CPI R27, 0x04         ; Verifica limite alto (0x400)
+    BRGE END_FREQ         ; Sai se ultrapassou limite
+    RJMP FREQ_LOOP        ; Continua a verificação
+END_FREQ:
+    STS 0x402, R20        ; Armazena a frequência no endereço 0x402
+    RJMP MAIN_LOOP        ; Retorna ao loop principal
