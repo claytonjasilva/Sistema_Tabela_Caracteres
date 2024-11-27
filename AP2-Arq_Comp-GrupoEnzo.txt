@@ -1,1 +1,328 @@
+; Enzo Guedes Cardoso - 202401000019 - TA
+; Luca Confente - 202401553867 - TA
+; Jeronimo Chiclana - 202401590118 - TA
+; Julia Siodaro - 202401000434 - TA
+; Enzo Lazzrotto - 202402035258 - NT
+; Enzo Edelman - 202407096166 - NT
+
+; ----------- Etapa 1 ----------------
+ldi ZH, 0x02        ; Parte alta do endereço inicial (0x200)
+ldi ZL, 0x00        ; Parte baixa do endereço inicial
+
+; Armazenar (A-Z)
+ldi r16, 'A'        
+letras_maiusculas:
+    st Z+, r16          ; Armazenar o caractere no endereço Z
+    inc r16             ; Próximo caractere
+    cpi r16, 'Z'+1      ; encerrar no Z
+    brne letras_maiusculas
+
+; Armazenar (a-z)
+ldi r16, 'a'       
+letra_minuscula:
+    st Z+, r16          ; Armazenar o caractere no endereço Z
+    inc r16             ; Próximo caractere
+    cpi r16, 'z'+1      ; encerrar no z
+    brne letra_minuscula
+
+; Armazenar (0-9)
+ldi r16, '0'        
+digitos:
+    st Z+, r16          ; Armazenar o caractere no endereço Z
+    inc r16             ; Próximo caractere
+    cpi r16, '9'+1      ; encerrar no 9
+    brne digitos
+
+; Armazenar espaço em branco (0x20)
+ldi r16, 0x20       
+st Z+, r16
+
+; Armazenar caractere <ESC> (0x1B)
+ldi r16, 0x1B       
+st Z+, r16
+
+; ---------- PORTD (entrada) ---------
+clr r16             ; Zerando r16 para configurar os pinos como entrada
+out DDRD, r16       
+
+; ----------- PORTC (saida) ----------
+ldi r18, 0xFF       ; Configura os pinos de PORTC como saída
+out DDRC, r18      
+
+; ----------- Z para o início da memória (0x300) --------
+ldi ZH, 0x03        ; Parte alta (H) do endereço inicial
+ldi ZL, 0x00        ; Parte baixa (L) do endereço inicial
+
+ldi r19, 0          ; Inicializando o contador de caracteres em 0
+
+; --------------- Loop ler sequências ---------
+main_loop:
+    ; Esperar o código inicial 0x1C
+esperar_comando:
+    in r16, PIND         ; PORTD
+    cpi r16, 0x1C        ; Comparar com 0x1C
+    brne esperar_comando ; Se não for diferente de 0x1C, continua esperando
+
+    ; Leitura de caracteres
+leitura:
+    in r16, PIND         ; PORTD
+    
+     ; Verificar se o caractere é válido (0x20 <= caractere <= 0x7E)
+    cpi r16, 0x20        ; Comparar com o menor caractere válido (espaço)
+    brlt leitura         ; Se for menor que 0x20, continua lendo
+    cpi r16, 0x7F        ; Comparar com o maior caractere válido (0x7E)
+    brge leitura         ; Se for maior que 0x7E, continuar lendo
+
+    ; Verificar se é o caractere <ESC> (0x1B), e se for, encerrar sequência
+	in r16, PIND         ; Ler caractere da porta D (PORTD)
+    cpi r16, 0x1D            ; Verificar se é <ESC>
+    breq sequencia_fim       ; Se for, encerrar sequência
+
+	in r16, PIND         ; Ler caractere da porta D (PORTD)
+    cpi r16, 0x1B        ; Verificar se é <ESC>
+    breq programa_fim   ; Se for, encerrar sequência
+
+    ; Armazenar caractere na memória (0x300 a 0x400)
+    st Z+, r16         
+
+    ; Incrementar contador de caracteres
+    inc r19               ; Se for, terminar a sequência
+
+    ; Verificar limite de memória (0x400)
+    ldi r17, 0x04        ; Parte alta do limite (0x400)
+    mov r18, ZH          ; Copiar o valor de ZH para r18
+    cp r18, r17          ; Comparar parte alta de Z com 0x04
+    brlo leitura         ; Se ainda estiver dentro do limite, continuar lendo
+    breq verificar      
+    rjmp add_espaco      ; Se for fora do limite, adicionar espaço extra e encerrar
+
+verificar:
+    cpi ZL, 0x00         ; Comparar parte baixa de Z com 0x00
+    brlo leitura         ; Se dentro do limite, é pra continuar
+    rjmp add_espaco      ; Caso contrário, adicionar espaço extra
+
+; Adicionar espaço extra e encerrar 
+add_espaco:
+    ldi r16, 0x20        ; Código ASCII do espaço
+    st Z+, r16           ; Adicionar o espaço extra (0x20)
+    rjmp programa_fim    
+
+sequencia_fim:
+    ; Adicionar marcador de espaço (0x20) para finalizar a sequência
+    ldi r16, 0x20        
+    st Z+, r16           ; Armazenando espaço
+
+    ; Armazenar o número de caracteres (em r19) no endereço 0x0401
+    ldi ZH, 0x04         ; Parte alta do endereço de memória 0x0401
+    ldi ZL, 0x01         ; Parte baixa do endereço de memória 0x0401
+    mov r16, r19         ; Copiar contador para r16
+    st Z+, r16           
+
+    ; Enviar o número de caracteres para a porta de saída (PORTC)
+    out PORTC, r19      
+
+    rjmp main_loop       ; Voltar para o início do loop
+
+programa_fim:
+    rjmp programa_fim     ; Loop infinito
+
+
+
+
+=============================================================================== CÓDIGO 2 ====================================================================================
+OBS: Segue segundo codigo visto o mal introsamento do grupo na reta final, visto tambem que novamente os mesmos 2 integrantes do grupo nao trabalharam absolutamente nada.
+Infelizemnte os códigos não estão completos. Tivemos bastente difículdade.
+=============================================================================== CÓDIGO 2 ====================================================================================
+
+
+; Define os inicio e limite do trecho de memoria que é para ocupar.
+ldi r30, low(0x200)  
+ldi r31, high(0x200) 
+
+.def contador = r23
+ldi contador, 0
+
+                                                           ; PASSO 1 TABELA DE DADOS
+ldi r16, 65 ; Começa pelo ASCII de A maiusculo
+; Loop que incrementa e armazena o valor de r16 ate chegar em 90(ASCII) da ultima letra maiuscula)
+loopMaius:
+	st Z, r16           
+	inc r16             
+	adiw r30, 1 ; Esse operando incrementa o endereço de memoria cada vez que o loop roda
+	cpi r16, 91         
+	BRNE loopMaius          
+
+ldi r16, 97
+; Função identica a loopMinus, so muda os valores
+loopMinus:
+	st Z, r16        
+	inc r16              
+	adiw r30, 1
+	cpi r16, 123         
+	BRNE loopMinus
+	
+ldi r18, 48
+; Função para adicionar digitos de 0-9
+loopDec:
+	st Z, r18           
+	inc r18              
+	adiw r30, 1
+	cpi r18, 58          
+	BRNE loopDec
+
+; Caracteres especiais (ESC) e (Espaço)
+ldi r18, 0x1B
+st Z+ , r18 ; Z+ é utilizado para dirigir o resultado ao próximo endereço não utilizado dentro dos limites definidos de Z
+ldi r18, 0x20
+st Z+, r18
+
+                                                        ; PASSO 2 E 3, PORTAS DE ENTRADA/SAÍDA
+
+; Definição das portas de entrada/saída
+clr r16
+out DDRC, r16
+ldi r18, 0xFF
+out DDRD, r18
+
+; Definição dos limites de memória para o próximo passo
+ldi r30, low(0x300)
+ldi r31, high(0x300)
+
+    
+
+loop:
+; Caso o código seja 0x1C 
+espera:
+    in r16, PINC         
+    cpi r16, 0x1C        
+    brne espera 
+
+
+lerSequencia1:
+    in r16, PINC        
+    
+    cpi r16, 32        
+    brlt lerSequencia1   
+    cpi r16, 123        
+    brge lerSequencia1   
+
+    ; Caso o código seja 0x1D
+	in r16, PINC         
+    cpi r16, 0x1D        
+    brne lerSequencia1    
+
+	in r16, PINC        
+    cpi r16, 0x1B        
+    breq fim   
+
+    st Z+, r16           
+
+    inc contador              ; Incrementa o contador de caracteres
+   ; Se for, terminar a sequencia
+
+    ; Verificar limite de memoria (0x400)
+    ldi r17, 0x04        ; Parte alta do limite (0x400)
+    mov r18, r31          
+    cp r18, r17         
+    brlo fimSequencia1   
+    breq verLow1       
+    rjmp espaco1       
+
+verLow1:
+    cpi r30, 0x00         ; Comparar parte baixa de Z com 0x00
+    brlo lerSequencia1   ; Se dentro do limite, continuar
+    rjmp espaco1       ; Caso contrário, adicionar espaço extra
+
+; Adicionar espaço extra (0x20) e parar
+espaco1:
+    ldi r16, 0x20        ; Código ASCII do espaço
+    st Z+, r16           
+    rjmp fim    
+
+fimSequencia1:
+    ; Adicionar marcador de espaço (0x20) para finalizar a sequência
+    ldi r16, 32        ; Espaço
+    st Z+, r16           
+
+    ; Armazenar o número de caracteres (em r19) no endereço de memória 0x0401
+    ldi r31, high(0x401)        
+    ldi r30, low(0x401)       
+    mov r16, contador         ; Copiar contador para r16
+    st Z+, r16         
+
+    ; Enviar o número de caracteres para a porta de saída (PORTC)
+    out PORTC, r19      
+
+
+    ; Espera o código 0x1E na porta de entrada
+esperaCodigo_1E:
+    in r16, PINC        
+    cpi r16, 0x1E        
+    brne esperaCodigo_1E 
+
+    ; Le o caractere da porta de entrada
+    in r16, PINC          
+    
+    ; Verifica se o caractere é válido (ASCII entre 32 e 123)
+verificaCaractere:
+    cpi r16, 32         
+    brlt esperaCodigo_1E 
+    cpi r16, 123          
+    brge esperaCodigo_1E 
+
+    ;Caracter valido
+    ldi r30, low(0x200)   ; Inicia o ponteiro Z no início da tabela de caracteres (0x200)
+    ldi r31, high(0x200)  ; Parte alta do endereço da tabela de caracteres
+    ldi r18, 0           
+	ldi r16 , 0
+contarLoop:
+    ld r19, Z             ; Carrega o caractere da tabela
+    cp r19, r16          
+    brne proximaPosicao  
+    inc r18               ; Se forem iguais incrementa o contador de ocorrências
+
+proximaPosicao:
+    adiw r30, 1           ; Avança para a próxima posição na tabela
+    cpi r30, 0x04        ; Verifica se chegou ao final da tabela (endereço 0x400)
+    brne contarLoop      ; Se nno chegou ao final continua o loop
+
+    ; Armazena o número de ocorrencias do caractere no endereço 0x402
+    ldi r30, low(0x402)  
+    ldi r31, high(0x402)  
+    st Z+, r18            ; Armazena o número de ocorrencias no endereço 0x402
+
+
+armazenarFrequencias:
+    ldi r30, low(0x400)   ; Inicia o ponteiro Z no início da tabela de frequencias
+    ldi r31, high(0x400)  
+    ldi r18, 0           
+    ldi r16, 0           
+
+    ;Laco para verificar e atualizar a tabela de frequencias
+verificaFreq:
+    in r16, PINC          ; Lê o caractere da porta de entrada
+    cpi r16, 32           ; Verifica se o caractere é válido
+    brlt armazenaFreq    ; Se for válido, armazena a frequência
+
+    ; Atualiza o numero de ocorrencias do caractere
+armazenaFreq:
+    
+    ldi r30, low(0x400)  
+    ldi r31, high(0x400)
+    ld r19, Z             
+    cp r19, r16          
+    brne proximaPosicao 
+    ld r18, Z+            
+    inc r18              
+    st Z+, r18          
+
+
+    rjmp loop
+
+
+
+fim:
+ 
+    rjmp fim
+
 
